@@ -50,35 +50,3 @@ class ImageFolder(nn.Module):
             l = random.randrange(1,4,2)
             do_transformations.append(A.Blur(blur_limit=(l,l), p=1))
         return A.Compose(do_transformations)
-
-
-"""
-if __name__ == "__main__":
-    image_list = []
-
-    dataset = ImageFolder(64)
-    for i in range(6):
-        clean, annotated = dataset[i]
-        image_list.append(clean)
-        image_list.append(annotated)
-
-    plot_images(image_list, 4)
-
-  def plot_images(images, cols=None):
-    if cols == None : cols = 2 - len(images)%2
-    w, h = cols, len(images)//cols
-    f, axarr = plt.subplots(h,w, figsize=(w*5, h*5))
-    plt.subplots_adjust(bottom=0.5, top=0.9+h*0.015, wspace=0.1, hspace=0.1)
-    if h==1:
-        for i, image in enumerate(images):
-            axarr[i].axis("off")
-            axarr[i].imshow(image)
-    else:
-        for i, image in enumerate(images):
-            x = i%w
-            y = i//w
-            axarr[y,x].axis("off")
-            axarr[y,x].imshow(image)
-    plt.show()
-    return
-"""
