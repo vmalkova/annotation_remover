@@ -42,12 +42,12 @@ class ImgSpace():
 
 class ImgFont():
   def __init__(self):
-    fonts = [ {'path': r'fonts/LiberationSans-Italic.ttf', 'size': 8, 'y_dif': 0},
-              {'path': r'fonts/LiberationSerif-Italic.ttf', 'size': 7, 'y_dif': -1.5},
-              {'path': r'fonts/LiberationSans-BoldItalic.ttf', 'size': 9, 'y_dif': 1},
-              {'path': r'fonts/LiberationSerif-Bold.ttf', 'size': 8, 'y_dif': 0},
-              {'path': r'fonts/LiberationSerif-Regular.ttf', 'size': 7, 'y_dif': -1},
-              {'path': r'fonts/LiberationSerif-BoldItalic.ttf', 'size': 7, 'y_dif': -1}]
+    fonts = [ {'path': r'../fonts/LiberationSans-Italic.ttf', 'size': 8, 'y_dif': 0},
+              {'path': r'../fonts/LiberationSerif-Italic.ttf', 'size': 7, 'y_dif': -1.5},
+              {'path': r'../fonts/LiberationSans-BoldItalic.ttf', 'size': 9, 'y_dif': 1},
+              {'path': r'../fonts/LiberationSerif-Bold.ttf', 'size': 8, 'y_dif': 0},
+              {'path': r'../fonts/LiberationSerif-Regular.ttf', 'size': 7, 'y_dif': -1},
+              {'path': r'../fonts/LiberationSerif-BoldItalic.ttf', 'size': 7, 'y_dif': -1}]
     self.font_d = random.choice(fonts)
 
   def text_length(self, text, size):

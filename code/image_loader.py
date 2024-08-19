@@ -1,6 +1,6 @@
 import os
 import random
-import glob
+from glob import glob
 from PIL import Image
 from annotation_generator import AnnotationGenerator
 
@@ -33,7 +33,7 @@ class ImageLoader(AnnotationGenerator):
             except Exception as e:
               print(f"Corrupted image: {img_path}")
               for img in pair:
-                os.remove(img)
+                if os.path.exists(img): os.remove(img)
         else:
           print(f"Missing annotated image for {clean_img}")
           os.remove(clean_img)
@@ -58,12 +58,10 @@ class ImageLoader(AnnotationGenerator):
   def folder_size(self, folder_num=None):
     if folder_num == None : folder_num = self.save_dir
     matching_folder = f'{MATCHING_DIR}/matching {folder_num}'
-    size = 0
+    clean_size, annot_size = 0, 0
     if os.path.exists(f'{matching_folder}/clean'):
-      print("clean:", len(os.listdir(f'{matching_folder}/clean')))
       clean_size = len(os.listdir(f'{matching_folder}/clean'))
     if os.path.exists(f'{matching_folder}/annotated'):
-      print("annotated:", len(os.listdir(f'{matching_folder}/annotated')))
       annot_size = len(os.listdir(f'{matching_folder}/annotated'))
     size = max(clean_size, annot_size)
     return size
@@ -105,7 +103,7 @@ class ImageLoader(AnnotationGenerator):
 
 if __name__ == "__main__":
   il = ImageLoader()
-  num_folders, folder_size = 268, 500
+  num_folders, folder_size = 210, 600
   print("Num folders:", num_folders)
   print("Folder size:", folder_size)
   il.set_num_folders(num_folders)
