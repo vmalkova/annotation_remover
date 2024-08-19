@@ -16,7 +16,7 @@ from augmentation import ImageFolder
 NUM_BATCHES = 100
 NUM_WORKERS = 12
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.cuda.empty_cache()
+
 
 @dataclass
 class TrainingConfig:
@@ -78,12 +78,12 @@ def train_loop(config, noise_scheduler, train_dataloader):
         progress_bar = tqdm(train_dataloader)
         progress_bar.set_description(f"Epoch {str(epoch).zfill(2)}")
         for i, (clean, _) in enumerate(train_dataloader):
-            clean_images = clean.to(DEVICE)
-            noise = torch.randn(clean_images.shape).to(DEVICE)
-            bs = clean_images.shape[0]
-            timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bs,), device=DEVICE).long()
-            noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps).to(DEVICE)
-
+            with torch.no_grad():
+                clean_images = clean.to(DEVICE)
+                noise = torch.randn(clean_images.shape).to(DEVICE)
+                bs = clean_images.shape[0]
+                timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bs,), device=DEVICE).long()
+                noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps).to(DEVICE)
             with accelerator.accumulate(model):
                 noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
                 loss = F.mse_loss(noise_pred, noise)
@@ -93,7 +93,7 @@ def train_loop(config, noise_scheduler, train_dataloader):
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
-
+            torch.cuda.empty_cache()
             STEP_SIZE = NUM_BATCHES//10
             if i % STEP_SIZE == 0:
                 logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": i}
