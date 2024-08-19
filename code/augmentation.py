@@ -2,7 +2,7 @@ import numpy as np
 from PIL import Image
 import albumentations as A
 import torch.nn as nn
-from annotation_generator import AnnotationGenerator
+from image_loader import ImageLoader
 from torchvision import transforms
 import random
 
@@ -12,14 +12,15 @@ class ImageFolder(nn.Module):
         super(ImageFolder, self).__init__()
         self.size = img_size
         self.to_tensor = transforms.ToTensor()
-        ag = AnnotationGenerator()
-        self.images = ag.get_matching_images(num_images)
+        il = ImageLoader()
+        self.images = il.get_matching_images(num_images)
         
     def __len__(self):
         return len(self.images)
     
     def __getitem__(self, i):
-        transform = self.random_transformation()
+        width, height = Image.open(self.images[i][0]).size
+        transform = self.random_transformation(width, height)
         augmented_pair = []
         for image in self.images[i]:
             image = Image.open(image)
@@ -33,8 +34,9 @@ class ImageFolder(nn.Module):
 
         return augmented_pair
     
-    def random_transformation(self):
-        s1, s2 = int(self.size*3.14), self.size
+    def random_transformation(self, width, height):
+        s1, s2, actual_size = int(self.size*3.14), self.size, min(width, height)
+        if actual_size < s1: s1 = actual_size
         do_transformations = [A.CenterCrop(height=s1, width=s1), A.Resize(width=s2, height=s2)]
         for transformation in [ A.HorizontalFlip(p=1), A.VerticalFlip(p=1)]:
             if random.randint(0,1):
