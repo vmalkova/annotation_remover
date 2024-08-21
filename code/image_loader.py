@@ -96,8 +96,8 @@ class ImageLoader(AnnotationGenerator):
     for folder_num, _ in enumerate(os.listdir(MATCHING_DIR)):
       self.switch_save_folder(folder_num)
       current_folder_size = self.get_folder_size()
-      print(f"Folder {folder_num} size: {current_folder_size}")
       if current_folder_size != folder_size:
+        print(f"Folder {folder_num} size: {current_folder_size}")
         self.set_folder_size(folder_size)
         print(f"Set to size: {self.get_folder_size()}")
     return
