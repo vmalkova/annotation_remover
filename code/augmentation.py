@@ -27,11 +27,7 @@ class ImageFolder(nn.Module):
             augmented = transform(image=np.array(image))
             image = augmented["image"]
             augmented_pair.append(image)
-
-        # to tensor & normalise
         augmented_pair = [self.to_tensor(image) for image in augmented_pair]
-        augmented_pair = [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(image) for image in augmented_pair]
-
         return augmented_pair
     
     def random_transformation(self, width, height):
