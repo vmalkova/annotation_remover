@@ -10,10 +10,15 @@ CROPPED_DIR, MATCHING_DIR = '../images/cropped', '../images/matching'
 class ImageLoader(AnnotationGenerator):
   def __init__(self):
     super().__init__()
+    self.default_folder_size = 600
     return
   
   def get_matching_images(self, total_amount=None):
-    if total_amount == None: total_amount = self.num_matching_images()
+    current_amount = self.num_matching_images()
+    if total_amount == None: total_amount = current_amount
+    if total_amount > current_amount:
+      self.set_num_folders(total_amount // self.default_folder_size + 1)
+      self.set_folder_sizes(self.default_folder_size)
     matching_images = [] # list of path pairs
     matching_dirs = [dir for dir in os.listdir(MATCHING_DIR) if os.path.isdir(f"{MATCHING_DIR}/{dir}")]
     while len(matching_images) < total_amount:
@@ -45,7 +50,7 @@ class ImageLoader(AnnotationGenerator):
       total += sum([len(os.listdir(f'{MATCHING_DIR}/{dir}/{type}')) for dir in os.listdir(MATCHING_DIR) if os.path.isdir(f'{MATCHING_DIR}/{dir}')])
     return total
   
-  def remove_matching(self, new_num_images):
+  def set_folder_size(self, new_num_images):
     for folder_type in ["clean", "annotated"]:
       folder = f'{MATCHING_DIR}/matching {self.save_dir}/{folder_type}'
       # delete images in folder
@@ -55,7 +60,7 @@ class ImageLoader(AnnotationGenerator):
     self.save_matching(new_num_images)
     return
   
-  def folder_size(self, folder_num=None):
+  def get_folder_size(self, folder_num=None):
     if folder_num == None : folder_num = self.save_dir
     matching_folder = f'{MATCHING_DIR}/matching {folder_num}'
     clean_size, annot_size = 0, 0
@@ -90,14 +95,11 @@ class ImageLoader(AnnotationGenerator):
   def set_folder_sizes(self, folder_size):
     for folder_num, _ in enumerate(os.listdir(MATCHING_DIR)):
       self.switch_save_folder(folder_num)
-      current_folder_size = self.folder_size()
+      current_folder_size = self.get_folder_size()
       print(f"Folder {folder_num} size: {current_folder_size}")
-      if current_folder_size < folder_size:
-        self.save_matching(folder_size-current_folder_size)
-        print(f"Increased to size: {self.folder_size()}")
-      elif current_folder_size > folder_size:
-        self.remove_matching(folder_size)
-        print(f"Decreased to size: {self.folder_size()}")
+      if current_folder_size != folder_size:
+        self.set_folder_size(folder_size)
+        print(f"Set to size: {self.get_folder_size()}")
     return
 
 
