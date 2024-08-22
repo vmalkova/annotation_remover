@@ -8,14 +8,17 @@ from torchvision import transforms
 from UNET_model import UNET
 
 
-sizes = [path.split("size")[1] for path in os.listdir("results") if "size" in path]
+LOAD_MODEL_DIR = "../results"
+LOAD_IMG_DIR, SAVE_IMG_DIR = "../images/test/to_clean", "../images/test/done"
+EMPTY_LOAD_DIR = False
+
+sizes = [path.split("size")[1] for path in os.listdir(LOAD_MODEL_DIR) if "size" in path]
 image_size = int(sorted(sizes)[-1])
-results_dir = f"results/size{image_size}"
-if not os.path.exists(results_dir): models_saved = []
-else: models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(results_dir) if "unet_checkpoint" in x]
+chosen_model_dir = f"{LOAD_MODEL_DIR}/size{image_size}"
+if not os.path.exists(chosen_model_dir): models_saved = []
+else: models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(chosen_model_dir) if "unet_checkpoint" in x]
 model_to_load = 0 if models_saved==[] else sorted(models_saved)[-1]
 device = torch.device("cpu")
-load_img_dir, save_img_dir = "images/test/to_clean", "images/test/done"
 
 
 class ImageFolder(nn.Module):
@@ -24,11 +27,11 @@ class ImageFolder(nn.Module):
         self.size = img_size
         self.to_tensor = transforms.ToTensor()
         self.images = []
-        for img in os.listdir(load_img_dir):
-            img_path = f"{load_img_dir}/{img}"
+        for img in os.listdir(LOAD_IMG_DIR):
+            img_path = f"{LOAD_IMG_DIR}/{img}"
             try:
                 Image.open(img_path).load()
-                if not any([img in name for name in os.listdir(save_img_dir)]):
+                if not any([img in name for name in os.listdir(SAVE_IMG_DIR)]):
                     self.images.append(img_path)
             except Exception:
                 print(f"Corrupted image: {img}")
@@ -61,7 +64,7 @@ def run(model, dataloader):
             prediction = torch.sigmoid(prediction)
             for i, img in enumerate(prediction):
                 img = transforms.ToPILImage()(img)
-                img.save(f"{save_img_dir}/clean {name[i]}")
+                img.save(f"{SAVE_IMG_DIR}/clean {name[i]}")
     return
 
 
@@ -69,9 +72,10 @@ if __name__ == "__main__":
     if model_to_load == 0: print (f"Model (size {image_size}) doesn't exist"); exit()
     print (f"Model (size {image_size} v{model_to_load}) loaded")
     model = UNET(3, 3).to(device)
-    load_path = f"{results_dir}/unet_checkpoint{str(model_to_load).zfill(4)}.pth.tar"
+    load_path = f"{chosen_model_dir}/unet_checkpoint{str(model_to_load).zfill(4)}.pth.tar"
     model.load_state_dict(torch.load(load_path, map_location=device)["state_dict"])
     dataset = ImageFolder(image_size)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=False)
     run(model, dataloader)
+    if EMPTY_LOAD_DIR: os.system(f"rm -r {LOAD_IMG_DIR}/*")
     print ("Images saved")
