@@ -11,75 +11,103 @@ from UNET_model import UNET
 from tqdm import tqdm
 
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_TO_LOAD = 1   # 0 from scratch
+MODEL_TO_LOAD = -1   # 0 from scratch, -1 last model
 IMAGE_SIZE, CHANNELS_IMG = 256, 3
-BATCH_SIZE, NUM_BATCHES, NUM_EPOCHS = 100, 300, 100
-NUM_WORKERS, LEARNING_RATE = 12, 1e-4
-STEP_SIZE = NUM_BATCHES//20
-RESULTS_DIR = f"../results/size{IMAGE_SIZE}_{BATCH_SIZE}"
-if not os.path.exists(RESULTS_DIR): os.makedirs(RESULTS_DIR)
-if not MODEL_TO_LOAD: MODEL_TO_LOAD = len(os.listdir(RESULTS_DIR)) + 1
-CHECKPOINT_PATH = f"{RESULTS_DIR}/unet_checkpoint{str(MODEL_TO_LOAD).zfill(3)}.pth.tar" 
-LOG_DIR = f"log{IMAGE_SIZE}_{BATCH_SIZE}_{str(MODEL_TO_LOAD).zfill(3)}"
-if LOG_DIR in os.listdir("logs"): os.system(f"rm -r logs/{LOG_DIR}")
-os.makedirs(f"logs/{LOG_DIR}")
-torch.cuda.empty_cache()
+BATCH_SIZE, NUM_BATCHES, NUM_EPOCHS = 8,100, 1000
+NUM_WORKERS, LEARNING_RATE, DECAY_RATE = 12, 3e-5, 0.96
+TRAIN_SIZE, VAL_SIZE = int(0.8*BATCH_SIZE*NUM_BATCHES), int(0.2*BATCH_SIZE*NUM_BATCHES)
 
-def print_to_tensorboard(step):
-    EXAMPLES = 8
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+results_dir = f"../results/size{IMAGE_SIZE}_{BATCH_SIZE}"
+if not os.path.exists(results_dir): os.makedirs(results_dir)
+models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(results_dir) if "unet_checkpoint" in x]
+model_to_save = 1 if models_saved==[] else sorted(models_saved)[-1]+1
+save_path = f"{results_dir}/unet_checkpoint{str(model_to_save).zfill(4)}.pth.tar" 
+log_dir = f"logs/log{IMAGE_SIZE}_{BATCH_SIZE}_{str(model_to_save).zfill(4)}"
+if os.path.exists(log_dir): os.system(f"rm -r {log_dir}/")
+else: os.makedirs(log_dir)
+
+
+def print_to_tensorboard(epoch, lr):
+    examples = 8
+    step_size = VAL_SIZE//20
     with torch.no_grad():
-        for real, annotated in var_dataloader:
-            real = real.to(DEVICE)
-            annotated = annotated.to(DEVICE)
-            prediction = model(annotated)
-            img_grid_real = torchvision.utils.make_grid(real[:EXAMPLES], normalize=True)
-            img_grid_fake = torchvision.utils.make_grid(prediction[:EXAMPLES], normalize=True)
-            img_grid_annotated = torchvision.utils.make_grid(annotated[:EXAMPLES], normalize=True)
-            writer.add_image(f"real", img_grid_real, global_step=step)
-            writer.add_image(f"fake", img_grid_fake, global_step=step)
-            writer.add_image(f"annotated", img_grid_annotated, global_step=step)
+        pbar = tqdm(val_dataloader)
+        pbar.set_description(f"Validation {epoch}")
+        for batch_idx, (real, annotated) in enumerate(val_dataloader):
+            with torch.no_grad():
+                real = real.to(device)
+                annotated = annotated.to(device)
+            with torch.cuda.amp.autocast():
+                prediction = model(annotated)
+                prediction = torch.sigmoid(prediction)
+                loss = loss_fn(prediction, real)
+            if batch_idx % step_size == 0:
+                pbar.set_postfix(loss = loss.item())
+                pbar.update(step_size)
+            # Save first batch of images
+            if batch_idx == 0:
+                img_grid_real = torchvision.utils.make_grid(real[:examples], normalize=True)
+                img_grid_fake = torchvision.utils.make_grid(prediction[:examples], normalize=True)
+                img_grid_annotated = torchvision.utils.make_grid(annotated[:examples], normalize=True)
+                writer.add_image(f"real", img_grid_real, global_step=epoch)
+                writer.add_image(f"fake", img_grid_fake, global_step=epoch)
+                writer.add_image(f"annotated", img_grid_annotated, global_step=epoch)
+                writer.add_scalar("loss", loss.item(), global_step=epoch)
+                writer.add_scalar("lr", lr, global_step=epoch)
+        torch.cuda.empty_cache()
     return
 
-def train(model, lr_scheduler, optimizer, loss_fn, scaler):
+def train(model, optimizer, loss_fn, scaler):
+    step_size = TRAIN_SIZE//20
     for epoch in range(NUM_EPOCHS):
         pbar = tqdm(train_dataloader)
+        pbar.set_description(f"Epoch {epoch}")
+        loss = 0
         for batch_idx, (real, annotated) in enumerate(train_dataloader):
+            with torch.no_grad():
+                real = real.to(device)
+                annotated = annotated.to(device)
             optimizer.zero_grad()
-            annotated = annotated.to(DEVICE)
-            real = real.to(DEVICE)
             # forward
             with torch.cuda.amp.autocast():
                 prediction = model(annotated)
+                prediction = torch.sigmoid(prediction)
                 loss = loss_fn(prediction, real)
             # backward
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            lr_scheduler.step(loss)
             # Print losses
-            if batch_idx % STEP_SIZE == 0:
-                pbar.set_postfix(loss = lr_scheduler.get_last_lr()[0])
-                pbar.update(STEP_SIZE)
-        print_to_tensorboard(step = epoch*NUM_BATCHES)
-        gen_checkpoint = {"state_dict": model.state_dict(), "optimizer": optimizer.state_dict()}
-        torch.save(gen_checkpoint, CHECKPOINT_PATH)
+            if batch_idx % step_size == 0:
+                pbar.set_postfix(loss = loss.item())
+                pbar.update(step_size)
+        torch.cuda.empty_cache()
+        lr_scheduler.step(loss.item())
+        if epoch % 50 == 0:
+            lr = lr_scheduler.get_last_lr()[0]
+            print_to_tensorboard(epoch, lr)
+            gen_checkpoint = {"state_dict": model.state_dict(), "optimizer": optimizer.state_dict()}
+            torch.save(gen_checkpoint, save_path)
     return
 
 
 if __name__ == "__main__":
-    transformed_dataset = ImageFolder(IMAGE_SIZE, BATCH_SIZE*NUM_BATCHES)
+    transformed_dataset = ImageFolder(IMAGE_SIZE, TRAIN_SIZE)
     train_dataloader = DataLoader(transformed_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, shuffle=True)
-    var_dataset = ImageFolder(IMAGE_SIZE, BATCH_SIZE)
-    var_dataloader = DataLoader(var_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, shuffle=False)
-    model = UNET(3, 3).to(DEVICE)
+    val_dataset = ImageFolder(IMAGE_SIZE, VAL_SIZE)
+    val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, shuffle=False)
+    model = UNET(3, 3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(0.5, 0.999))
-    # if checkpoint path exists, load model and optimizer
-    if os.path.exists(CHECKPOINT_PATH):
-        model.load_state_dict(torch.load(CHECKPOINT_PATH)["state_dict"])
-        optimizer.load_state_dict(torch.load(CHECKPOINT_PATH)["optimizer"])
-    lr_scheduler = ReduceLROnPlateau(optimizer, 'min')
-    loss_fn = nn.BCEWithLogitsLoss()
+    if not (MODEL_TO_LOAD == 0 or model_to_save == 1):
+        if MODEL_TO_LOAD == -1: load_num = model_to_save - 1
+        else: load_num = MODEL_TO_LOAD
+        load_path = f"{results_dir}/unet_checkpoint{str(load_num).zfill(4)}.pth.tar"
+        model.load_state_dict(torch.load(load_path)["state_dict"])
+        optimizer.load_state_dict(torch.load(load_path)["optimizer"])
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5)
+    # loss_fn = nn.BCEWithLogitsLoss()
+    loss_fn = nn.BCELoss()
     scaler = torch.cuda.amp.GradScaler()
-    writer = SummaryWriter(f"logs/{LOG_DIR}")
-    train(model, lr_scheduler, optimizer, loss_fn, scaler)
+    writer = SummaryWriter(log_dir)
+    train(model, optimizer, loss_fn, scaler)
