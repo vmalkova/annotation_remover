@@ -12,13 +12,13 @@ from tqdm import tqdm
 
 
 MODEL_TO_LOAD = -1   # 0 from scratch, -1 last model
-IMAGE_SIZE, CHANNELS_IMG = 256, 3
-BATCH_SIZE, NUM_BATCHES, NUM_EPOCHS = 8,100, 1000
+IMAGE_SIZE, CHANNELS_IMG = 512, 3
+BATCH_SIZE, NUM_BATCHES, NUM_EPOCHS = 8, 100, 1000
 NUM_WORKERS, LEARNING_RATE, DECAY_RATE = 12, 3e-5, 0.96
 TRAIN_SIZE, VAL_SIZE = int(0.8*BATCH_SIZE*NUM_BATCHES), int(0.2*BATCH_SIZE*NUM_BATCHES)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-results_dir = f"../results/size{IMAGE_SIZE}_{BATCH_SIZE}"
+results_dir = f"../results/size{IMAGE_SIZE}"
 if not os.path.exists(results_dir): os.makedirs(results_dir)
 models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(results_dir) if "unet_checkpoint" in x]
 model_to_save = 1 if models_saved==[] else sorted(models_saved)[-1]+1
@@ -40,13 +40,13 @@ def print_to_tensorboard(epoch, lr):
                 annotated = annotated.to(device)
             with torch.cuda.amp.autocast():
                 prediction = model(annotated)
-                prediction = torch.sigmoid(prediction)
                 loss = loss_fn(prediction, real)
             if batch_idx % step_size == 0:
                 pbar.set_postfix(loss = loss.item())
                 pbar.update(step_size)
             # Save first batch of images
             if batch_idx == 0:
+                prediction = torch.sigmoid(prediction)
                 img_grid_real = torchvision.utils.make_grid(real[:examples], normalize=True)
                 img_grid_fake = torchvision.utils.make_grid(prediction[:examples], normalize=True)
                 img_grid_annotated = torchvision.utils.make_grid(annotated[:examples], normalize=True)
@@ -72,7 +72,6 @@ def train(model, optimizer, loss_fn, scaler):
             # forward
             with torch.cuda.amp.autocast():
                 prediction = model(annotated)
-                prediction = torch.sigmoid(prediction)
                 loss = loss_fn(prediction, real)
             # backward
             scaler.scale(loss).backward()
@@ -105,9 +104,8 @@ if __name__ == "__main__":
         load_path = f"{results_dir}/unet_checkpoint{str(load_num).zfill(4)}.pth.tar"
         model.load_state_dict(torch.load(load_path)["state_dict"])
         optimizer.load_state_dict(torch.load(load_path)["optimizer"])
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5)
-    # loss_fn = nn.BCEWithLogitsLoss()
-    loss_fn = nn.BCELoss()
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+    loss_fn = nn.BCEWithLogitsLoss()
     scaler = torch.cuda.amp.GradScaler()
     writer = SummaryWriter(log_dir)
     train(model, optimizer, loss_fn, scaler)
