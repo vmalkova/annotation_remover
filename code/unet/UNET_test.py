@@ -10,7 +10,8 @@ from UNET_model import UNET
 
 IMAGE_SIZE, BATCH_SIZE = 256, 16
 results_dir = f"../results/size{IMAGE_SIZE}_{BATCH_SIZE}"
-models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(results_dir) if "unet_checkpoint" in x]
+if not os.path.exists(results_dir): models_saved = []
+else: models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(results_dir) if "unet_checkpoint" in x]
 model_to_load = 0 if models_saved==[] else sorted(models_saved)[-1]
 if torch.backends.mps.is_available(): device = torch.device("mps")
 elif torch.backends.cuda.is_built(): device = torch.device("cuda")
@@ -56,7 +57,7 @@ def run(model, dataloader):
 
 
 if __name__ == "__main__":
-    if model_to_load == 0: print ("No model to load"); exit()
+    if model_to_load == 0: print (f"Model (img_size: {IMAGE_SIZE}, batch_size: {BATCH_SIZE}) doesn't exist"); exit()
     print (f"Model {model_to_load} loaded")
     model = UNET(3, 3).to(device)
     load_path = f"{results_dir}/unet_checkpoint{str(model_to_load).zfill(4)}.pth.tar"
