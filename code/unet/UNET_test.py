@@ -18,6 +18,7 @@ chosen_model_dir = f"{LOAD_MODEL_DIR}/size{image_size}"
 if not os.path.exists(chosen_model_dir): models_saved = []
 else: models_saved = [int(x.split("unet_checkpoint")[1][:4]) for x in os.listdir(chosen_model_dir) if "unet_checkpoint" in x]
 model_to_load = 0 if models_saved==[] else sorted(models_saved)[-1]
+if not os.path.exists(SAVE_IMG_DIR): os.makedirs(SAVE_IMG_DIR)
 device = torch.device("cpu")
 
 
